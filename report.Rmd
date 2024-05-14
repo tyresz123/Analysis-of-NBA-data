@@ -1,0 +1,219 @@
+---
+title: "nba"
+output: word_document
+date: "2024-05-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	comment = ""
+)
+```
+
+```{r}
+setwd("C:\\Users\\Administrator\\Desktop\\nba")
+library(tidyverse)
+library(randomForest)
+library(ggrepel)
+game=read_csv("games.csv")
+game_detile=read_csv("games_details.csv")
+rank=read_csv("ranking.csv")
+team=read_csv("teams.csv")
+player=read_csv("players.csv")
+#games
+game=game[,-c(3,7,14)]
+#game_detile
+game_detile=game_detile[,-c(9)]
+```
+
+# Introduction
+
+The National Basketball Association (NBA), with its rich history and global influence, offers a wealth of data that can be analyzed to gain insights into the sport's dynamics. This report delves into the intricate relationship between player performance, team dynamics, and geographical factors that contribute to the success and outcomes of NBA games. Through a comprehensive data-driven approach, we aim to uncover patterns and correlations that have shaped the league's competitive landscape.
+
+Firstly, we embark on an exploration of individual player performance metrics, specifically focusing on their win rates during games. This analysis seeks to identify the statistical significance of various player attributes and how they translate into victories on the court. By examining the correlation between player statistics and game outcomes, we aim to understand the pivotal moments and actions that can swing the tide of a match in favor of a particular team.
+
+Secondly, the report shifts its lens to the collective, scrutinizing the factors that contribute to a team's success. We analyze team strategies and player synergies to determine the multifaceted nature of winning in the NBA. This section endeavors to highlight the importance of teamwork and how it can often be the deciding factor in the league's high-stakes environment.
+
+In addition to individual and team analyses, we also examine the role of external factors in shaping the competitive landscape of the NBA. The geographical distribution of successful American teams is explored to ascertain if there are any regional advantages or disadvantages that may impact a team's performance. This analysis takes into account various socioeconomic and cultural factors that could influence a team's ability to attract talent, secure sponsorships, and foster a winning culture.
+
+By synthesizing these analyses, this report aims to provide a holistic view of the NBA, shedding light on the interplay between individual prowess, team collaboration, and geographical considerations. We anticipate that the findings will not only enrich our understanding of the game but also offer strategic implications for players, coaches, and management alike.
+
+# The players with the best winning percentage
+
+## Home court
+
+```{r}
+merged_data = inner_join(game, player, by = c('SEASON',"HOME_TEAM_ID" = "TEAM_ID"),relationship = "many-to-many")
+###球员
+temp_dat=merged_data  %>%
+  group_by(PLAYER_NAME) %>%na.omit()%>%
+  summarise(TeamTotal=n())
+mean_count=mean(temp_dat$TeamTotal)
+merged_data  %>%
+  group_by(PLAYER_NAME) %>%na.omit()%>%
+  summarise(TeamWinning =sum(HOME_TEAM_WINS)/n(), TeamWins=sum(HOME_TEAM_WINS), TeamTotal=n())%>%filter(TeamTotal>mean_count) %>%
+  arrange(desc(TeamWinning))%>%head(10)
+```
+
+## Visiting ground
+
+```{r}
+merged_data_v <- inner_join(game, player, by = c('SEASON',"VISITOR_TEAM_ID" = "TEAM_ID"),relationship = "many-to-many")
+temp_dat_v=merged_data_v  %>%
+  group_by(PLAYER_NAME) %>%na.omit()%>%
+  summarise(TeamTotal=n())
+mean_count_v=mean(temp_dat$TeamTotal)
+
+merged_data_v  %>%
+  group_by(PLAYER_NAME) %>%na.omit()%>%
+  summarise(TeamWinning =sum(ifelse(HOME_TEAM_WINS == 0, 1, 0))/n(), TeamWins=sum(HOME_TEAM_WINS), TeamTotal=n())%>%filter(TeamTotal>mean_count_v) %>%
+  arrange(desc(TeamWinning))%>%head(10)
+```
+
+# Factor analysis of the team's own game results
+
+In our quest to unravel the secrets behind a team's success in the NBA, we have meticulously analyzed a multitude of performance indicators, with a particular focus on the significance of three-point shooting and so on.  This statistical category, now a cornerstone of modern basketball strategy, has emerged as a pivotal factor in determining the outcome of games.  Our analysis has extended beyond the arc, however, to encompass a broader spectrum of metrics that define a winning formula in the league.
+
+The commonalities among victorious teams are not solely defined by their proficiency from beyond the three-point line.  Instead, they are characterized by a synergistic blend of attributes that include, but are not limited to, efficient ball movement, defensive tenacity, rebounding prowess, and the ability to convert turnovers into points.  These teams exhibit a high level of offensive and defensive coordination, where each player's contribution is strategically aligned to maximize the team's collective output.
+
+In essence, the analysis of NBA indicators such as three-point shooting has shed light on the multifaceted nature of success in basketball.  It has revealed that while certain skills and strategies are more prevalent among winning teams, it is the harmonious combination of these elements, along with a deep understanding of the game and the ability to execute under pressure, that truly sets these teams apart.
+
+```{r}
+game_detile_team=game_detile%>%select(-TEAM_CITY,-PLAYER_ID,-PLAYER_NAME,-NICKNAME,-START_POSITION,-MIN)%>%group_by(GAME_ID,TEAM_ID,TEAM_ABBREVIATION)%>%summarise_all(mean)
+game_team=game%>%select(-GAME_DATE_EST,-VISITOR_TEAM_ID,-SEASON)
+total_data=game_detile_team%>%inner_join(game_team,by=c("GAME_ID",'TEAM_ID'='HOME_TEAM_ID'),relationship = "many-to-many")%>%na.omit()
+total_data$HOME_TEAM_WINS=as.factor(total_data$HOME_TEAM_WINS)
+model_team=randomForest(HOME_TEAM_WINS~FGA+FG_PCT+FG3A+FG3_PCT+FTA+FT_PCT+OREB+DREB+AST+STL+BLK+TO+PF+PTS,data=total_data[,-c(1,2,3)])
+model_team%>%importance()%>%as.data.frame()%>%arrange(desc(MeanDecreaseGini))
+```
+
+Then, we get results as follows:
+
+1. **PTS** (Points Scored): Points scored is a straightforward metric that reflects a team's offensive efficiency. Teams that score more points tend to win more games, as scoring is the primary objective of basketball. High-scoring teams often have a balanced attack, with multiple players capable of putting the ball in the basket.
+
+2. **DREB** (Defensive Rebounds): Defensive rebounds are crucial for controlling the defensive end of the court. Securing defensive rebounds prevents the opposing team from getting second-chance points and allows for a quicker transition to offense. Teams that excel at defensive rebounding can limit the scoring opportunities of their opponents and increase their own.
+
+3. **AST** (Assists): Assists are a measure of a team's ball movement and teamwork. Teams with high assist numbers typically have a more fluid and unselfish offensive system, where players are looking to create open shots for their teammates. Good ball movement can often lead to higher-percentage shots and is a key factor in breaking down a defense.
+
+4. **FGA** (Field Goal Attempts): Field goal attempts indicate the number of shots a team takes. While simply taking more shots does not guarantee more points, it can be a sign of an aggressive and assertive offensive strategy. However, it's also important to consider the efficiency (FG_PCT) alongside FGA, as a higher number of attempts without a correspondingly high shooting percentage can be less effective.
+
+5. **FG_PCT** (Field Goal Percentage): This is the ratio of field goals made to field goal attempts, reflecting a team's shooting accuracy. A high field goal percentage suggests that a team is not only taking a good number of shots but also making a high proportion of them, which directly translates into more points.
+
+Based on the random forest model's analysis, we can conclude that the interplay between offensive efficiency (PTS, FGA, FG_PCT), teamwork (AST), and defensive prowess (DREB) are pivotal in determining the outcome of NBA games. Teams that can effectively score, share the ball, and secure defensive rebounds are more likely to succeed on the court. This underscores the importance of a well-rounded approach to the game, where a balance of offensive and defensive strategies is essential for victory.
+
+The model's findings suggest that while scoring is important, it is equally crucial to focus on the efficiency of scoring and the ability to prevent the opposition from scoring through solid defensive rebounding. Furthermore, the value of assists highlights the significance of unselfish play and the creation of high-quality shot opportunities. This comprehensive analysis provides valuable insights for coaches and players looking to enhance their game strategy and performance.
+
+# Player's factor analysis of winning and losing
+
+Similarly, based on the random forest model, we build a player influence factor structure model and get the following results:
+
+```{r}
+play_dat=merged_data%>%select(-GAME_DATE_EST,-GAME_ID,-HOME_TEAM_ID,-VISITOR_TEAM_ID,-SEASON,-PLAYER_NAME,-PLAYER_ID)%>%distinct()
+play_dat$HOME_TEAM_WINS=as.factor(play_dat$HOME_TEAM_WINS)
+model_play=randomForest(HOME_TEAM_WINS~.,data = play_dat)
+model_play%>%importance()%>%as.data.frame()%>%arrange(desc(MeanDecreaseGini))
+```
+
+Let's delve into the five factors identified by your random forest model as significant in the context of individual player performance and their impact on NBA game outcomes:
+
+1. **PTS** (Points Scored): This metric represents the total number of points a player scores during a game. It is a direct measure of a player's offensive contribution and is often a key indicator of their ability to impact the game's outcome positively.
+
+2. **PTS_AWAY** (Points Scored Away): This factor is similar to PTS but specifically accounts for points scored when the player's team is playing an away game. It's important because it adjusts for the potential impact of home-court advantage on a player's performance, highlighting their ability to perform well even in challenging environments.
+
+3. **FG_PCT** (Field Goal Percentage): This is the ratio of field goals made to field goal attempts, providing a measure of a player's shooting efficiency. A higher FG_PCT indicates that the player is converting a larger proportion of their shots into points, which is crucial for contributing to the team's score.
+
+4. **FG_PCT_away** (Field Goal Percentage Away): Like FG_PCT, this metric measures shooting efficiency but is specific to away games. It accounts for the potential variance in a player's performance when playing in an opposing team's arena, which can be influenced by factors like crowd noise, travel fatigue, and different court conditions.
+
+5. **FG3_PCT** (Three-Point Field Goal Percentage): This factor measures the player's efficiency in shooting three-point field goals. In the modern NBA, where the three-point shot has become increasingly important, a high FG3_PCT can significantly influence a game's outcome, as it represents a high-value scoring opportunity.
+
+The random forest model's findings underscore the multifaceted nature of player performance in the NBA. The identified factors highlight the importance of a player's ability to score points consistently, both at home and on the road, and their overall shooting efficiency, including from the three-point range. These factors are critical in determining a player's impact on the game, as they reflect both the quantity and quality of a player's offensive contributions.
+
+The model's emphasis on away game performance (PTS_AWAY and FG_PCT_away) suggests that a player's ability to maintain high levels of performance in challenging conditions is a significant predictor of success. This could be particularly valuable for coaches when devising game strategies, as it indicates the importance of having players who can step up in high-pressure situations.
+
+Moreover, the inclusion of FG3_PCT in the model's analysis reflects the contemporary NBA's shift towards three-point shooting as a key strategic element. Players who can consistently score from beyond the arc can significantly bolster a team's offensive capabilities, making them a valuable asset in the league's current landscape.
+
+In conclusion, a player's offensive efficiency, ability to score in both home and away games, and proficiency in three-point shooting are pivotal in influencing the outcome of NBA games. These insights can guide team management and coaching staff in player development, recruitment, and game strategy formulation to optimize their chances of winning.
+
+# Geographic distribution of teams and differences in winning percentage
+
+Finally, we plotted the geographic distribution of NBA teams on a map of the United States and the corresponding winning percentage of the teams as follows:
+
+```{r}
+team%>%group_by(YEARFOUNDED)%>%summarise(n())
+city_data <- data.frame(
+  CITY = c("Atlanta", "Boston", "Brooklyn", "Charlotte", "Chicago", "Cleveland", "Dallas", 
+           "Denver", "Detroit", "Golden State", "Houston", "Indiana", "Los Angeles Clippers", 
+           "Los Angeles Lakers", "Memphis", "Miami", "Milwaukee", "Minnesota", "New Orleans", 
+           "New York", "Oklahoma City", "Orlando", "Philadelphia", "Phoenix", "Portland", 
+           "Sacramento", "San Antonio", "Toronto", "Utah", "Washington"),
+  Latitude = c(33.749, 42.361, 40.678, 35.227, 41.878, 41.499, 32.776, 
+               39.739, 42.331, 37.774, 29.760, 39.768, 34.052, 34.052, 
+               35.149, 25.761, 43.038, 44.977, 29.951, 40.712, 35.467, 
+               28.538, 39.952, 33.448, 45.505, 38.581, 29.424, 43.651, 
+               40.760, 38.581),
+  Longitude = c(-84.388, -71.058, -73.944, -80.843, -87.629, -81.694, -96.796, 
+                -104.990, -83.046, -122.414, -95.369, -86.158, -118.244, -118.243, 
+                -90.051, -80.191, -87.906, -93.265, -90.071, -74.006, -97.516, 
+                -81.379, -75.165, -112.074, -122.675, -121.494, -98.493, -79.383, 
+                -111.890, -77.036)  # Updated Washington longitude
+)
+usa <- map_data("usa")
+
+team_win=merged_data  %>%
+  group_by(HOME_TEAM_ID) %>%na.omit()%>%
+  summarise(TeamWinning =sum(HOME_TEAM_WINS)/n(), TeamWins=sum(HOME_TEAM_WINS), TeamTotal=n()) %>%
+  arrange(desc(TeamWinning))
+
+team_win_final=team_win%>%inner_join(team,by=c("HOME_TEAM_ID"='TEAM_ID'))%>%select(CITY,ABBREVIATION,TeamWinning)%>%arrange(desc(TeamWinning))
+team_win_final$CITY[9]=c("Los Angeles Lakers")
+team_win_final$CITY[19]=c("Los Angeles Clippers")
+final_data=team_win_final%>%inner_join(city_data,by=c("CITY"))
+ggplot() +
+  geom_polygon(data = usa, aes(x = long, y = lat, group = group), fill = "white", color = "black") +
+  geom_point(data = final_data, aes(x = Longitude, y = Latitude, size = TeamWinning, alpha=TeamWinning, color = TeamWinning)) +
+  scale_color_gradient(low = "green", high = "red", name = "TeamWinning")+
+  geom_text_repel(data = city_data, aes(x = Longitude, y = Latitude, label = CITY), 
+                  box.padding = 0.5, point.padding = 0.5, force = 0.5,
+                  size = 3, vjust = -0.5) +
+  theme_void() +
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5)) +
+  labs(title = "NBA Teams' Cities in USA", caption = "Source: City data from NBA teams")
+```
+
+The observation that Western Conference teams in the NBA have a higher win rate despite having fewer teams than the Eastern Conference can be attributed to several factors. Here's an analysis of this geographic disparity and its implications:
+
+1. **Competitive Balance**: The higher win rate among Western Conference teams may indicate a more competitive balance within the conference. This could be due to a variety of factors, including stronger rosters, better coaching, or more effective team strategies.
+
+2. **Travel and Scheduling**: NBA teams in the West may have to travel longer distances for away games, which could initially seem like a disadvantage. However, this could also lead to more efficient travel scheduling and potentially less fatigue, as teams may cluster their travel to minimize back-to-back games.
+
+3. **Historic Performance**: The West's higher win rate could be a reflection of historic performance trends. Some NBA dynasties have been based in the West, which could contribute to a culture of success and a higher standard of play.
+
+4. **Player Distribution**: There might be a concentration of high-caliber players in the Western Conference, either due to team management strategies or the appeal of certain cities for players. This could naturally lead to stronger teams and higher win rates.
+
+5. **Market Influence**: The Western Conference includes several large markets and high-profile teams, which can attract top talent and create a competitive environment that drives up win rates.
+
+6. **Coaching and Management**: The quality of coaching and management can significantly impact a team's performance. If the Western Conference has a higher concentration of highly skilled and experienced coaches and front office personnel, this could contribute to better in-game strategies and overall team success.
+
+The higher win rate of NBA teams in the Western Conference, despite having fewer teams than the Eastern Conference, suggests that geographic location and conference structure can influence team performance. It's important to note that while the win rate is a significant metric, it is not the sole determinant of a team's success. Factors such as player health, team chemistry, and the ability to perform under pressure also play crucial roles.
+
+The geographic distribution of NBA teams and their corresponding win rates offer valuable insights into the strategic management of the sport. For the league, this could mean considering adjustments to scheduling or conference structures to ensure parity and competitiveness across all teams. For individual teams, it underscores the importance of understanding the broader competitive landscape and adapting strategies to succeed within it.
+
+Ultimately, the higher win rate in the West could be a signal for Eastern Conference teams to analyze and learn from the successful strategies employed by their Western counterparts, while also considering the unique challenges and opportunities presented by their geographic location and conference dynamics.
+
+# Conclusion
+
+The application of data analytics, specifically the random forest model, has provided a nuanced perspective on the determinants of success in the NBA. The analysis has spanned various aspects of the game, from individual player performance to team dynamics and geographical considerations.
+
+1. **Player Performance Factors**: The model has identified points scored (PTS), points scored away from home (PTS_AWAY), field goal percentage (FG_PCT), field goal percentage away (FG_PCT_away), and three-point field goal percentage (FG3_PCT) as key individual performance indicators. These metrics highlight the importance of a player's offensive contribution, their ability to perform under the pressure of away games, and the modern emphasis on three-point shooting.
+
+2. **Team Performance Factors**: For teams, points scored (PTS), defensive rebounds (DREB), assists (AST), field goal attempts to field goal percentage (FGA/FG_PCT), and the efficiency of three-point shooting (FG3_PCT) emerged as significant. These factors underscore the balance between offensive efficiency, teamwork, and defensive strength as critical to winning games.
+
+3. **Geographical Distribution**: The observation that Western Conference teams have a higher win rate despite fewer teams compared to the Eastern Conference points to several potential influences. These include competitive balance, travel and scheduling, historic performance trends, player distribution, market influence, and coaching and management quality.
+
+
+The analysis reveals that success in the NBA is a complex interplay of individual talent, team strategy, and external factors such as geography. High-performing players and teams exhibit a blend of scoring ability, shooting efficiency, and a capacity to excel both at home and on the road. Meanwhile, the higher win rate in the Western Conference may stimulate Eastern Conference teams to adopt successful strategies from their western counterparts while also considering their unique geographic and competitive context.
+
+For the NBA as a whole, understanding these factors can guide efforts to maintain competitive balance, enhance the league's appeal, and foster an environment where every team has the potential to succeed. For teams and players, recognizing the value of a well-rounded game, along with the strategic and psychological aspects of performance, is essential for achieving and sustaining success in the league.
